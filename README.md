@@ -43,8 +43,11 @@ src/main/java/com/example/aiagent
 export OPENAI_API_KEY=sk-xxx
 export OPENAI_BASE_URL=https://api.deepseek.com
 export OPENAI_MODEL=deepseek-chat
-mvn spring-boot:run
+./mvnw spring-boot:run
 ```
+
+
+> 项目已启用 Maven Wrapper，并在 `.mvn/settings.xml` 中默认配置阿里云 Maven 镜像。
 
 ## 对话接口
 
