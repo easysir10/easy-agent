@@ -10,4 +10,6 @@ import java.util.List;
 public class AgentExecutionResult {
     String finalReply;
     List<String> toolsUsed;
+    List<ToolExecutionResult> toolExecutions;
+    long durationMs;
 }

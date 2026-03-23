@@ -21,6 +21,8 @@ public class AgentService {
                 .userId(userId)
                 .reply(result.getFinalReply())
                 .toolsUsed(result.getToolsUsed())
+                .toolExecutions(result.getToolExecutions())
+                .durationMs(result.getDurationMs())
                 .build();
     }
 }
