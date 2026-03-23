@@ -1,6 +1,5 @@
 package com.example.aiagent.agentcore;
 
-import cn.hutool.core.util.ReUtil;
 import cn.hutool.core.util.StrUtil;
 import com.example.aiagent.agentmemory.ConversationMemory;
 import lombok.RequiredArgsConstructor;
@@ -12,7 +11,6 @@ import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -26,9 +24,13 @@ public class AgentExecutor {
     private final ChatClient chatClient;
     private final ToolRegistry toolRegistry;
     private final ConversationMemory conversationMemory;
+    private final ToolExecutionRecorder toolExecutionRecorder;
 
     public AgentExecutionResult execute(String userId, String userInput) {
+        long start = System.currentTimeMillis();
         List<Message> history = conversationMemory.getMessages(userId);
+        toolExecutionRecorder.clear();
+        log.info("Start agent execution, userId={}, historySize={}", userId, history.size());
 
         String answer = chatClient.prompt()
                 .messages(history)
@@ -47,32 +49,22 @@ public class AgentExecutor {
             answer = "抱歉，我暂时无法给出结果，请稍后重试。";
         }
 
-        List<String> toolsUsed = detectTools(userInput);
+        List<ToolExecutionResult> toolExecutions = toolExecutionRecorder.snapshot();
+        List<String> toolsUsed = toolExecutions.stream()
+                .map(ToolExecutionResult::getToolName)
+                .distinct()
+                .toList();
+        long durationMs = System.currentTimeMillis() - start;
+
         conversationMemory.append(userId, new UserMessage(userInput));
         conversationMemory.append(userId, new AssistantMessage(answer));
 
+        log.info("Finish agent execution, userId={}, toolCount={}, durationMs={}", userId, toolExecutions.size(), durationMs);
         return AgentExecutionResult.builder()
                 .finalReply(answer)
                 .toolsUsed(toolsUsed)
+                .toolExecutions(toolExecutions)
+                .durationMs(durationMs)
                 .build();
-    }
-
-    private List<String> detectTools(String userInput) {
-        String text = StrUtil.nullToEmpty(userInput).toLowerCase();
-        List<String> toolsUsed = new ArrayList<>();
-
-        if (ReUtil.contains("天气|weather|温度", text)) {
-            toolsUsed.add("WeatherTool");
-        }
-        if (ReUtil.contains("日志|error|exception|异常|堆栈", text)) {
-            toolsUsed.add("LogAnalysisTool");
-        }
-        if (ReUtil.contains("sql|查询|表结构|数据库", text)) {
-            toolsUsed.add("SqlGenerateTool");
-        }
-        if (ReUtil.contains("http|接口|api|请求", text)) {
-            toolsUsed.add("HttpRequestTool");
-        }
-        return toolsUsed;
     }
 }
