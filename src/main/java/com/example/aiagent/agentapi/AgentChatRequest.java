@@ -12,6 +12,11 @@ public class AgentChatRequest {
     private String userId;
 
     /**
+     * 会话标识。为空时系统会自动创建新会话。
+     */
+    private String sessionId;
+
+    /**
      * 用户输入的自然语言消息。
      */
     @NotBlank(message = "message 不能为空")

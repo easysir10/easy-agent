@@ -8,4 +8,6 @@ import lombok.Value;
 public class ToolExecutionResult {
     String toolName;
     String output;
+    boolean success;
+    long durationMs;
 }
