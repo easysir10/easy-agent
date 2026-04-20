@@ -30,20 +30,21 @@ public class SessionService {
         return conversationMemory.listSessions(normalizeUserId(userId));
     }
 
-    public ConversationSession get(String sessionId) {
-        return conversationMemory.getSession(sessionId);
+    public ConversationSession get(String userId, String sessionId) {
+        return conversationMemory.getSession(normalizeUserId(userId), sessionId);
     }
 
-    public List<ConversationMessage> getMessages(String sessionId) {
+    public List<ConversationMessage> getMessages(String userId, String sessionId) {
+        conversationMemory.getSession(normalizeUserId(userId), sessionId);
         return conversationMemory.getMessageViews(sessionId);
     }
 
-    public ConversationSession clear(String sessionId) {
-        return conversationMemory.clearSession(sessionId);
+    public ConversationSession clear(String userId, String sessionId) {
+        return conversationMemory.clearSession(normalizeUserId(userId), sessionId);
     }
 
-    public void delete(String sessionId) {
-        conversationMemory.deleteSession(sessionId);
+    public void delete(String userId, String sessionId) {
+        conversationMemory.deleteSession(normalizeUserId(userId), sessionId);
     }
 
     private String normalizeUserId(String userId) {

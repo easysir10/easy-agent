@@ -3,6 +3,7 @@ package com.example.aiagent.agentmemory;
 import cn.hutool.core.collection.ListUtil;
 import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
+import com.example.aiagent.exception.SessionAccessDeniedException;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
@@ -48,27 +49,38 @@ public class ConversationMemory {
     }
 
     public ConversationSession getOrCreateSession(String userId, String sessionId) {
+        String normalizedUserId = normalizeUserId(userId);
         if (StrUtil.isBlank(sessionId)) {
-            return createSession(userId, null);
+            return createSession(normalizedUserId, null);
         }
 
-        String normalizedUserId = normalizeUserId(userId);
-        return sessions.computeIfAbsent(sessionId, key -> {
-            Instant now = Instant.now();
-            memoryStore.putIfAbsent(key, new ArrayList<>());
-            return ConversationSession.builder()
-                    .sessionId(key)
-                    .userId(normalizedUserId)
-                    .title(buildDefaultTitle(key, null))
-                    .messageCount(0)
-                    .createdAt(now)
-                    .updatedAt(now)
-                    .build();
-        });
+        ConversationSession existing = sessions.get(sessionId);
+        if (existing != null) {
+            ensureOwner(existing, normalizedUserId);
+            return existing;
+        }
+
+        Instant now = Instant.now();
+        ConversationSession created = ConversationSession.builder()
+                .sessionId(sessionId)
+                .userId(normalizedUserId)
+                .title(buildDefaultTitle(sessionId, null))
+                .messageCount(0)
+                .createdAt(now)
+                .updatedAt(now)
+                .build();
+        ConversationSession previous = sessions.putIfAbsent(sessionId, created);
+        ConversationSession session = previous == null ? created : previous;
+        ensureOwner(session, normalizedUserId);
+        memoryStore.putIfAbsent(sessionId, new ArrayList<>());
+        return session;
     }
 
-    public ConversationSession getSession(String sessionId) {
-        return requireSession(sessionId);
+
+    public ConversationSession getSession(String userId, String sessionId) {
+        ConversationSession session = getSessionById(sessionId);
+        ensureOwner(session, normalizeUserId(userId));
+        return session;
     }
 
     public List<ConversationSession> listSessions(String userId) {
@@ -90,7 +102,7 @@ public class ConversationMemory {
     }
 
     public void append(String sessionId, Message message) {
-        ConversationSession session = requireSession(sessionId);
+        ConversationSession session = getSessionById(sessionId);
         List<ConversationMessage> messages = memoryStore.computeIfAbsent(sessionId, key -> new ArrayList<>());
         messages.add(ConversationMessage.builder()
                 .role(resolveRole(message))
@@ -105,8 +117,8 @@ public class ConversationMemory {
         sessions.put(sessionId, refreshSession(session, messages, message));
     }
 
-    public ConversationSession clearSession(String sessionId) {
-        ConversationSession session = requireSession(sessionId);
+    public ConversationSession clearSession(String userId, String sessionId) {
+        ConversationSession session = getSession(userId, sessionId);
         memoryStore.put(sessionId, new ArrayList<>());
         ConversationSession updated = session.toBuilder()
                 .messageCount(0)
@@ -116,8 +128,8 @@ public class ConversationMemory {
         return updated;
     }
 
-    public void deleteSession(String sessionId) {
-        requireSession(sessionId);
+    public void deleteSession(String userId, String sessionId) {
+        getSession(userId, sessionId);
         sessions.remove(sessionId);
         memoryStore.remove(sessionId);
     }
@@ -127,8 +139,7 @@ public class ConversationMemory {
     }
 
     private List<ConversationMessage> getStoredMessages(String sessionId) {
-        requireSession(sessionId);
-        return memoryStore.getOrDefault(sessionId, new ArrayList<>());
+        return memoryStore.getOrDefault(getSessionById(sessionId).getSessionId(), new ArrayList<>());
     }
 
     private ConversationSession refreshSession(ConversationSession session, List<ConversationMessage> messages, Message message) {
@@ -165,7 +176,13 @@ public class ConversationMemory {
         return StrUtil.isBlank(title) || title.startsWith(DEFAULT_TITLE_PREFIX);
     }
 
-    private ConversationSession requireSession(String sessionId) {
+    private void ensureOwner(ConversationSession session, String normalizedUserId) {
+        if (!StrUtil.equals(session.getUserId(), normalizedUserId)) {
+            throw new SessionAccessDeniedException(StrUtil.format("会话 {} 不属于用户 {}", session.getSessionId(), normalizedUserId));
+        }
+    }
+
+    private ConversationSession getSessionById(String sessionId) {
         ConversationSession session = sessions.get(sessionId);
         if (session == null) {
             throw new NoSuchElementException("会话不存在: " + sessionId);
@@ -179,7 +196,7 @@ public class ConversationMemory {
 
     private String buildDefaultTitle(String sessionId, String title) {
         if (StrUtil.isNotBlank(title)) {
-            return title;
+            return StrUtil.maxLength(title, 24);
         }
         String suffix = StrUtil.maxLength(sessionId, 8);
         return DEFAULT_TITLE_PREFIX + suffix;

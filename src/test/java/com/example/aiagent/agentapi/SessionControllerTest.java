@@ -61,21 +61,21 @@ class SessionControllerTest {
 
     @Test
     void shouldQueryMessagesAndDeleteSession() throws Exception {
-        when(sessionService.getMessages(eq("s-1"))).thenReturn(List.of(
+        when(sessionService.getMessages(eq("u1001"), eq("s-1"))).thenReturn(List.of(
                 ConversationMessage.builder()
                         .role("user")
                         .content("hello")
                         .createdAt(Instant.parse("2025-01-01T00:00:00Z"))
                         .build()
         ));
-        doNothing().when(sessionService).delete("s-1");
+        doNothing().when(sessionService).delete("u1001", "s-1");
 
-        mockMvc.perform(get("/agent/sessions/s-1/messages"))
+        mockMvc.perform(get("/agent/sessions/s-1/messages").queryParam("userId", "u1001"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[0].role").value("user"))
                 .andExpect(jsonPath("$.data[0].content").value("hello"));
 
-        mockMvc.perform(delete("/agent/sessions/s-1"))
+        mockMvc.perform(delete("/agent/sessions/s-1").queryParam("userId", "u1001"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0));
     }

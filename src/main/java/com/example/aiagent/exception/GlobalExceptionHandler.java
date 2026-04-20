@@ -31,6 +31,12 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.failure(404, exception.getMessage()));
     }
 
+    @ExceptionHandler(SessionAccessDeniedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleForbidden(SessionAccessDeniedException exception) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiResponse.failure(403, exception.getMessage()));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleException(Exception exception) {
         log.error("Unhandled exception", exception);

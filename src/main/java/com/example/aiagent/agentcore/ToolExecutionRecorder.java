@@ -18,6 +18,10 @@ public class ToolExecutionRecorder {
         RECORDS.get().clear();
     }
 
+    public void release() {
+        RECORDS.remove();
+    }
+
     public void record(String toolName, String output, boolean success, long durationMs) {
         RECORDS.get().add(ToolExecutionResult.builder()
                 .toolName(toolName)

@@ -28,44 +28,48 @@ public class AgentExecutor {
 
     public AgentExecutionResult execute(String userId, String sessionId, String userInput) {
         long start = System.currentTimeMillis();
-        List<Message> history = conversationMemory.getMessages(sessionId);
         toolExecutionRecorder.clear();
-        log.info("Start agent execution, userId={}, sessionId={}, historySize={}", userId, sessionId, history.size());
+        try {
+            List<Message> history = conversationMemory.getMessages(sessionId);
+            log.info("Start agent execution, userId={}, sessionId={}, historySize={}", userId, sessionId, history.size());
 
-        String answer = chatClient.prompt()
-                .messages(history)
-                .messages(new SystemMessage("""
-                        你是一个工程化 AI Agent。
-                        - 优先复用已注册工具解决问题；
-                        - 输出结论时给出简洁步骤和建议；
-                        - 若信息不足，先指出缺失信息。
-                        """))
-                .user(userInput)
-                .tools(toolRegistry.getToolBeans().toArray())
-                .call()
-                .content();
+            String answer = chatClient.prompt()
+                    .messages(history)
+                    .messages(new SystemMessage("""
+                            你是一个工程化 AI Agent。
+                            - 优先复用已注册工具解决问题；
+                            - 输出结论时给出简洁步骤和建议；
+                            - 若信息不足，先指出缺失信息。
+                            """))
+                    .user(userInput)
+                    .tools(toolRegistry.getToolBeans().toArray())
+                    .call()
+                    .content();
 
-        if (StrUtil.isBlank(answer)) {
-            answer = "抱歉，我暂时无法给出结果，请稍后重试。";
+            if (StrUtil.isBlank(answer)) {
+                answer = "抱歉，我暂时无法给出结果，请稍后重试。";
+            }
+
+            List<ToolExecutionResult> toolExecutions = toolExecutionRecorder.snapshot();
+            List<String> toolsUsed = toolExecutions.stream()
+                    .map(ToolExecutionResult::getToolName)
+                    .distinct()
+                    .toList();
+            long durationMs = System.currentTimeMillis() - start;
+
+            conversationMemory.append(sessionId, new UserMessage(userInput));
+            conversationMemory.append(sessionId, new AssistantMessage(answer));
+
+            log.info("Finish agent execution, userId={}, sessionId={}, toolCount={}, durationMs={}",
+                    userId, sessionId, toolExecutions.size(), durationMs);
+            return AgentExecutionResult.builder()
+                    .finalReply(answer)
+                    .toolsUsed(toolsUsed)
+                    .toolExecutions(toolExecutions)
+                    .durationMs(durationMs)
+                    .build();
+        } finally {
+            toolExecutionRecorder.release();
         }
-
-        List<ToolExecutionResult> toolExecutions = toolExecutionRecorder.snapshot();
-        List<String> toolsUsed = toolExecutions.stream()
-                .map(ToolExecutionResult::getToolName)
-                .distinct()
-                .toList();
-        long durationMs = System.currentTimeMillis() - start;
-
-        conversationMemory.append(sessionId, new UserMessage(userInput));
-        conversationMemory.append(sessionId, new AssistantMessage(answer));
-
-        log.info("Finish agent execution, userId={}, sessionId={}, toolCount={}, durationMs={}",
-                userId, sessionId, toolExecutions.size(), durationMs);
-        return AgentExecutionResult.builder()
-                .finalReply(answer)
-                .toolsUsed(toolsUsed)
-                .toolExecutions(toolExecutions)
-                .durationMs(durationMs)
-                .build();
     }
 }
